@@ -8,13 +8,10 @@ import (
 	"time"
 )
 
-var masterDelay = time.Duration(500 * time.Millisecond)
+var masterDelay = time.Duration(5 * time.Second)
+var masterDelayOnErr = time.Duration(500 * time.Millisecond)
 
-// Start to serve node. That function can be used to register RPC
-// endpoints. See "tasks.RegisterArith()" as example that is
-// called in that function.
-// That function also call master endpoint to register current node giving
-// used address and port.
+// Contact the master continuously.
 func registerNodeToMaster(port, master string) {
 	// record
 	u := url.URL{}
@@ -28,10 +25,14 @@ func registerNodeToMaster(port, master string) {
 	// call master to register this node
 	for {
 		// continuously try to connect to master
-		if _, err := http.Get(u.String()); err == nil {
-			return
+		cl := http.Client{}
+		cl.Timeout = time.Duration(10 * time.Second)
+		_, err := cl.Get(u.String())
+		if err != nil {
+			log.Println("Master", u.String(), "cannot be contacted, retrying in", masterDelayOnErr)
+			time.Sleep(masterDelayOnErr)
+			continue
 		}
-		log.Println("Master", u.String(), "cannot be contacted, retrying in", masterDelay)
 		time.Sleep(masterDelay)
 	}
 
@@ -43,5 +44,5 @@ func RegisterNode(port string, master string) {
 	port = strings.Replace(port, ":", "", -1)
 	port = strings.Replace(port, "[", "", -1)
 	port = strings.Replace(port, "]", "", -1)
-	registerNodeToMaster(port, master)
+	go registerNodeToMaster(port, master)
 }

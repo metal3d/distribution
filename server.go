@@ -61,6 +61,15 @@ func registerMasterHandler() {
 	http.HandleFunc(RegisterEndpoint, func(w http.ResponseWriter, req *http.Request) {
 		a := strings.Split(req.RemoteAddr, ":")[0]
 		remoteport := req.URL.Query().Get("port")
+		for _, node := range Nodes {
+			if node.Addr == a && remoteport == node.Port {
+				if Debug {
+					fmt.Println("Node already registered:", node)
+				}
+				w.WriteHeader(201)
+				return
+			}
+		}
 		Nodes = append(Nodes, &Node{a, remoteport, 0})
 		if Debug {
 			fmt.Println("Nodes:", Nodes)
