@@ -1,0 +1,14 @@
+version: "2"
+services:
+
+  node:
+    build: .
+    command: -node -master master:10000
+    depends_on:
+      - master
+
+  master:
+    build: .
+    ports:
+      - 10000:10000
+
