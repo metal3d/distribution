@@ -7,36 +7,65 @@ That package aims to help you to create distributed calculation to nodes. It mak
 You may install the package via
 
 ```
-go get -u gopkg.in/metal3d/distribution.V1
+go get -u gopkg.in/metal3d/distribution.v1
 ```
+
+# Try the example
+
+To not interfer with your packages and install example binary, please follow this instructions that export another GOPATH to temporary directory.
+
+That example, that is in `_example` directory, will build a tiny docker image and launches master and node containers. You will be able to call `/sum` endpoint that will send a random sum on one node.
+
+You can scale up and down node list, stop master, restart master, to see what happends.
+
+Please, 
+
+```bash
+
+# install example without installing binary (-d)
+go get -d -u gopkg.in/metal3d/distribution.v1/_example
+cd $GOPATH/src/gopkg.in/distribution.v1/_example
+make build
+docker-compose up
+
+# open a new terminal and do:
+# -> scale up nodes
+docker-compose scale node=4
+
+# try calculation
+for i in $(seq 6); do curl -s localhost:10000/sum & done; wait
+
+# -> scale node down
+docker-compose scale node=2
+
+# re-try calculation
+for i in $(seq 6); do curl -s localhost:10000/sum & done; wait
+
+# stop master to see that nodes will try to reconnect
+docker-compose stop master
+
+# after a while, try to restart master, nodes will
+# be redetected.
+docker-compose start master
+
+# IMPORTANT
+# then please stop docker containers and cleanup
+docker-compose stop
+docker-compose down -v
+
+```
+
 
 # Usage
 
-The given example will help you to understand how to create nodes, master and RPC endpoints.
+The following example will help you to understand how to create nodes, master and RPC endpoints.
 
-At first, let's create a "tasks" package that implement a simple "Sum":
+We will create a "master" that can handler "nodes" connections. The master will open port "3000".
+We will implement a "/sum" endpoint that will call "node" and call `Arith.Sum`.
 
-```golang
-package tasks
+We will create a "node" listening on a random port. That node will register itself to "localhost:3000" that is the master. That registration will send the node listening port. So, you will be able to launch serveral nodes in different terminals. Begin with only one to be sure.
 
-import "time"
-
-// a simple Arith type
-type Arith int
-
-// Implement a RPC endpoint. Keep in mind that methods should have 
-// 2 arguments: one represents params, second represents reply and you should
-// return an error
-func (a *Arith) Sum(args *[]int, reply *int) error {
-    time.Sleep(1 * time.Second) // simulate long process
-    for _, v := range *args {
-        *reply += v
-    }
-    return nil
-}
-```
-
-Now let's create our "master" in "master/main.go":
+Let's create our "master" in "master/main.go":
 
 ```golang
 package main
@@ -45,7 +74,7 @@ import (
     "fmt"
     "net/http"
     "net/rpc"
-    dist "gopkg.in/metal3d/distribution.V1"
+    dist "gopkg.in/metal3d/distribution.v1"
 )
 
 func main(){
@@ -72,7 +101,7 @@ That master node is now able to register nodes, the call to  `dist.RegisterMaste
 
 **NOTE** `RegisterMaster` will start a goroutine that will check if nodes are alive. When a node doesn't respond, so the master removes it from the list.
 
-Now, create node source code in "node/main.go":
+Now, create node source code in "node/main.go" with a `Arith` type that can respond to RPC calls:
 
 ```golang
 package main
@@ -80,15 +109,29 @@ package main
 import (
     "fmt"
     "net"
+    "time"
     "net/http"
     "net/rpc"
-    "./tasks"
-    dist "gopkg.in/metal3d/distribution.V1"
+    dist "gopkg.in/metal3d/distribution.v1"
 )
+
+// a simple Arith type
+type Arith int
+
+// Implement a RPC endpoint. Keep in mind that methods should have 
+// 2 arguments: one represents params, second represents reply and you should
+// return an error
+func (a *Arith) Sum(args *[]int, reply *int) error {
+    time.Sleep(1 * time.Second) // simulate long process
+    for _, v := range *args {
+        *reply += v
+    }
+    return nil
+}
 
 func main(){
     // now, register Arith as a RPC endpoint
-    rpc.Register(new(tasks.Arith))
+    rpc.Register(new(Arith))
 
     // and let RPC to register our HTTP endpoints
     rpc.HandleHTTP()
@@ -120,7 +163,9 @@ Listening :3000
 $ cd node
 $ go run main.go
 
-# open a third term
+# afterward, you can open several terminals and launch other nodes.
+
+# open a third term to call master/sum endpoint on port 3000:
 curl localhost:3000/sum
 ```
 
