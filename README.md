@@ -2,6 +2,47 @@
 
 That package aims to help you to create distributed calculation to nodes. It makes use of RPC and help you to auto-register nodes.
 
+Distribution package ease the node registration and heartbeat. Master checks nodes, and nodes checks master. When a node is killed/stopped, so the master detects and removes that nodes. New nodes can register to master.
+
+That package provides 2 methods to call RPC nodes:
+
+- `distribution.Call(string, interface{}, interface{})` to make a sync call
+- `distribution.Go(string, interface{}, interface{})` to make an async call
+
+Both method do the same call, but the returned values are not used the same. First return an error, while second return a `*rpc.Call` that can be `nil` in case of error.
+
+Example:
+
+```golang
+err := distribution.Call('Bayesian.GetClassification', &dataset1, &response1)
+if err != nil {
+    //error
+}
+
+err = distribution.Call('Bayesian.GetClassification', &dataset2, &response2)
+if err != nil {
+    //error
+}
+
+// or
+
+c1 = distribution.Go('Bayesian.GetClassification', &dataset1, &response1)
+if c1 == nil {
+    // error
+}
+c2 = distribution.Go('Bayesian.GetClassification', &dataset2, &response2)
+if c2 == nil {
+    //error
+} 
+
+// if no error, let's wait channels
+<-c1.Done
+<-c2.Done
+// At this time, both rpc calls succeded, we can use responses
+```
+
+The `Go` call is probably what you will really need to make async calls. But keep in mind that you can also call `Call` method in goroutines.
+
 # Installation
 
 You may install the package via
