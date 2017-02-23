@@ -2,22 +2,35 @@
 
 That package aims to help you to create distributed calculation to nodes. It makes use of RPC and help you to auto-register nodes.
 
-Distribution package ease the node registration and heartbeat. Master checks nodes, and nodes checks master. When a node is killed/stopped, so the master detects and removes that nodes. New nodes can register to master.
+Distribution package ease the node registration and node down detection. Master checks nodes registration, and removes it if it fails to contact. When a node is killed/stopped, so the master detects and removes that nodes. New nodes can register to master at any time.
+
+To be able to make use of this package, you have to:
+
+- create a master using `ServeMaster(interface)` where "interface" is a string like ":3000". You probably will call that method in a goroutine.
+- create nodes using `node := RegisterNode(masterUrl)` where "masterUrl" is a string like "master.url:3000", "localhost:3000" or via IP "172.17.1.1:3000"
+- make node service running via `node.Serve()`
+
+Note: `node.Serve()` and `RegisterNode()` are blocking, if you need to continue process after that calls, you will need to handle them in a goroutine. 
 
 That package provides 2 methods to call RPC nodes:
 
-- `distribution.Call(string, interface{}, interface{})` to make a sync call
-- `distribution.Go(string, interface{}, interface{})` to make an async call
+- `distribution.Call(string, interface{}, interface{})` to make a **sync** calls
+- `distribution.Go(string, interface{}, interface{})` to make an **async** calls
 
-Both methods do the same call, but the returned values are not used the same. 
+Both methods does the same call despite the fact that `Go()` will not block process. 
+Also,returned values are not used the same way !. 
 
-First return a `*Node` and an error, while second return a `*Waiter` that can be `nil` in case of error. The Waiter handles used `*Node` and a `Wait()` method bloking while the node has not answered. Because `Go()` method is async, there is no way (at this time) to be sure that the routine is ok unless checking `Waiter.Error()`. 
+`Call()` will return a `*Node` and an error, while `Go()` will return a `*Waiter` that can be `nil` in case of error. 
 
-Waiter handler Node and Wait() method.
+The Waiter handles contacted `*Node` and a `Wait()` method bloking while the node has not answered. 
+
+Because `Go()` method is async, there is no way (at this time) to be sure that the routine is ok unless checking `Waiter.Error()`. 
 
 Example:
 
 ```golang
+
+// Sync calls
 node1, err := distribution.Call('Bayesian.GetClassification', &dataset1, &response1)
 if err != nil {
     //error
@@ -28,7 +41,7 @@ if err != nil {
     //error
 }
 
-// or
+// Async calls
 
 w1 = distribution.Go('Bayesian.GetClassification', &dataset1, &response1)
 if w1.Error() != nil {
@@ -45,7 +58,7 @@ if w2.Error() != nil {
 // At this time, both rpc calls succeded, we can use responses
 ```
 
-The `Go` call is probably what you will really need to make async calls. But keep in mind that you can also call `Call` method in goroutines.
+The `Go()` call is probably what you will really need to make async calls. But keep in mind that **you can also call `Call` method in goroutines**.
 
 # Installation
 
@@ -57,47 +70,45 @@ go get -u gopkg.in/metal3d/distribution.v1
 
 # Try the example
 
-To not interfer with your packages and install example binary, please follow this instructions that export another GOPATH to temporary directory.
+That example, that is in `_example` directory, will build a tiny docker image and launches master and node containers. You will be able to call `/sum` and `/palindrom` endpoints.
 
-That example, that is in `_example` directory, will build a tiny docker image and launches master and node containers. You will be able to call `/sum` endpoint that will send a random sum on one node.
+`/sum` is only a routine that makes the sum of 3 random integers. 
 
-You can scale up and down node list, stop master, restart master, to see what happends.
+`/palindrom?n=X` will calculate how many binary palindrom exists from 0 to "X". That example split calculation in several ranges that are sent to several nodes. It reduce result after the all nodes reply.
 
-Please, 
+You can scale up and down node list and see that stopped nodes are detected and removed from the stack.
 
 ```bash
 
 # install example without installing binary (-d)
-go get -d -u gopkg.in/metal3d/distribution.v1/...
-cd $GOPATH/src/gopkg.in/distribution.v1/_example
-make
+$ go get -d -u gopkg.in/metal3d/distribution.v1/...
+$ cd $GOPATH/src/gopkg.in/distribution.v1/_example
+$ make
 
 # open a new terminal and do:
-# -> scale up nodes
-docker-compose scale node=4
+$ cd $GOPATH/src/gopkg.in/distribution.v1/_example
+# scale up nodes
+$ docker-compose scale node=4
 
 # try calculation
-for i in $(seq 6); do curl -s localhost:10000/sum & done; wait
+$ curl -s localhost:3001/sum
+Response from 172.17.1.2: 345365445465464
+$ curl -s localhost:3001/palindrom?n=2000
+Palindrom counter to 2000: 92
 
-# -> scale node down
-docker-compose scale node=2
+# -> scale down nodes
+$ docker-compose scale node=2
 
 # re-try calculation
-for i in $(seq 6); do curl -s localhost:10000/sum & done; wait
-
-# stop master to see that nodes will try to reconnect
-docker-compose stop master
-
-# after a while, try to restart master, nodes will
-# be redetected.
-docker-compose start master
+$ curl -s localhost:3001/sum
+Response from 172.17.1.2: 734466677764353
+$ curl -s localhost:3001/palindrom?n=2000
+Palindrom counter to 2000: 92
 
 # IMPORTANT
 # then please stop docker containers and cleanup
-docker-compose down -v
-
+$ make clean
 ```
-
 
 # Usage
 
@@ -124,21 +135,23 @@ func main(){
 
     // at first, let's register this process as
     // master. So that node can contact master
-    // to register.
-    go func(){
+    // to register using master-ip:3000
+    go func() {
         dist.ServeMaster(":3000")
-    }
+    }()
 
     // This is optionnal, but for testing purpose we will
-    // create a test endpoint to call nodes
+    // create a test endpoint to call nodes. So we create a HTTP server
+    // listening on :3001
     http.HandleFunc("/sum", func(w http.ResponseWriter, r *http.Request){
-        args := []int{2,4,6}
+        args := []int{2, 4, 6}
         reply := 0
         err := dist.Call("Arith.Sum", &args, &reply)
         if err != nil {
             fmt.Log("Error: ", err)
         } else {
             fmt.Prinln("Reply from node", node.Addr, reply)
+            w.Write(fmt.Sprintf("Response: %d\n", reply))
         }
     })
     fmt.Println("Listening :3001")
@@ -158,27 +171,36 @@ import (
     "net"
     "time"
     "net/http"
-    "net/rpc"
     dist "gopkg.in/metal3d/distribution.v1"
 )
 
 // a simple Arith type to handle RPC methods.
 type Arith int
 
+
+// sum values.
+func sum(values []int) int {
+    tot := 0
+    for _, v := range valuse {
+        tot += v
+    }
+    return tot
+}
+
 // Implement a RPC endpoint. Keep in mind that methods should have 
 // 2 arguments: one represents params, second represents reply and you should
 // return an error
 func (a *Arith) Sum(args *[]int, reply *int) error {
     time.Sleep(1 * time.Second) // simulate long process
-    for _, v := range *args {
-        *reply += v
-    }
+    *reply = a.sum(*args)
     return nil
 }
 
 func main(){
 
-    // create a node server - port is the RPC master
+    // create a node server - port is the RPC master.
+    // Note that "localhost:3000" is the RPC Master url.
+    // If master is not on localhost, replace that url.
     node := dist.RegisterNode("localhost:3000")
 
     // now, register Arith as a RPC endpoint
@@ -209,6 +231,7 @@ $ go run main.go
 
 # open a third term to call master/sum endpoint on port 3000:
 curl localhost:3001/sum
+Response: 12
 ```
 
 If you check terminal where you launched master, you'll see the reply from the node.
