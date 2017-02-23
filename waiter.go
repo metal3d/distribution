@@ -1,6 +1,9 @@
 package distribution
 
-import "net/rpc"
+import (
+	"errors"
+	"net/rpc"
+)
 
 // Waiter is a struct that is returned by Go() method to be able to
 // wait for a Node response. It handles the rpc.Call to be able to get
@@ -22,5 +25,8 @@ func (w *Waiter) Wait() {
 
 // Error returns the rpc.Call error if any.
 func (w *Waiter) Error() error {
+	if w.rpcCall == nil {
+		return errors.New("RPC client is nil, maybe node " + w.Node.Addr + " is broken")
+	}
 	return w.rpcCall.Error
 }
