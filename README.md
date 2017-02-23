@@ -127,7 +127,6 @@ package main
 import (
     "fmt"
     "net/http"
-    "net/rpc"
     dist "gopkg.in/metal3d/distribution.v1"
 )
 
@@ -168,7 +167,6 @@ package main
 
 import (
     "fmt"
-    "net"
     "time"
     "net/http"
     dist "gopkg.in/metal3d/distribution.v1"
