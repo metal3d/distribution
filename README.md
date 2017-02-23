@@ -9,35 +9,39 @@ That package provides 2 methods to call RPC nodes:
 - `distribution.Call(string, interface{}, interface{})` to make a sync call
 - `distribution.Go(string, interface{}, interface{})` to make an async call
 
-Both method do the same call, but the returned values are not used the same. First return an error, while second return a `*rpc.Call` that can be `nil` in case of error.
+Both method do the same call, but the returned values are not used the same. First return an error, while second return a `*Waiter` that can be `nil` in case of error. The Waiter handles used `*Node` and a `Wait()` method bloking while the node has not answered.
+
+Waiter handler Node and Wait() method.
+
+So, `Go()` method is probably better if you want to know wich node answered. See the palindrom handler in `_example` directory to see a complex calcluation on several nodes.
 
 Example:
 
 ```golang
-err := distribution.Call('Bayesian.GetClassification', &dataset1, &response1)
+node1, err := distribution.Call('Bayesian.GetClassification', &dataset1, &response1)
 if err != nil {
     //error
 }
 
-err = distribution.Call('Bayesian.GetClassification', &dataset2, &response2)
+node2, err := distribution.Call('Bayesian.GetClassification', &dataset2, &response2)
 if err != nil {
     //error
 }
 
 // or
 
-c1 = distribution.Go('Bayesian.GetClassification', &dataset1, &response1)
-if c1 == nil {
+w1 = distribution.Go('Bayesian.GetClassification', &dataset1, &response1)
+if w1 == nil {
     // error
 }
-c2 = distribution.Go('Bayesian.GetClassification', &dataset2, &response2)
-if c2 == nil {
+w2 = distribution.Go('Bayesian.GetClassification', &dataset2, &response2)
+if w2 == nil {
     //error
 } 
 
 // if no error, let's wait channels
-<-c1.Done
-<-c2.Done
+<-w1.Wait()
+<-w2.Wait()
 // At this time, both rpc calls succeded, we can use responses
 ```
 
@@ -64,7 +68,7 @@ Please,
 ```bash
 
 # install example without installing binary (-d)
-go get -d -u gopkg.in/metal3d/distribution.v1/_example
+go get -d -u gopkg.in/metal3d/distribution.v1/...
 cd $GOPATH/src/gopkg.in/distribution.v1/_example
 make build
 docker-compose up

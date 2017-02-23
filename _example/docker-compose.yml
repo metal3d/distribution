@@ -9,6 +9,7 @@ services:
 
   master:
     build: .
+    command: -debug=false
     ports:
       - 10000:10000
 

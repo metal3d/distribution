@@ -4,30 +4,33 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"math/rand"
 	"net"
 	"net/http"
 	"net/rpc"
-	"sort"
-
-	"github.com/metal3d/distribution/_example/tasks"
 
 	"github.com/metal3d/distribution"
+	"github.com/metal3d/distribution/_example/handlers"
+	"github.com/metal3d/distribution/_example/tasks"
+	//"gopkg.in/metal3d/distribution.v0/_example/handlers"
+	//"gopkg.in/metal3d/distribution.v0/_example/tasts"
+	//"gopkg.in/metal3d/distribution.v0"
 )
 
 var (
 	port   = 10000
 	node   = false
 	master = fmt.Sprintf("%s:%d", "localhost", port)
+	debug  = true
 )
 
 func main() {
 	flag.IntVar(&port, "port", port, "port to listen")
 	flag.BoolVar(&node, "node", node, "declare this process as node")
 	flag.StringVar(&master, "master", master, "master address")
+	flag.BoolVar(&debug, "debug", debug, "see logs")
 	flag.Parse()
 
-	distribution.Debug = true
+	distribution.Debug = debug
 
 	if node {
 		// open a listen interface
@@ -41,6 +44,7 @@ func main() {
 
 		//register RPC endpoints
 		tasks.RegisterArith()
+		tasks.RegisterPalindrom()
 
 		// generate endpoints
 		rpc.HandleHTTP()
@@ -50,29 +54,9 @@ func main() {
 	} else {
 		distribution.RegisterMaster()
 
-		// Add a simple test
-		http.HandleFunc("/sum", func(w http.ResponseWriter, r *http.Request) {
-			args := []int{rand.Int(), rand.Int(), rand.Int()}
-			reply := 0
-			// that sorts nodes from least used to higher used
-			sort.Sort(distribution.Nodes)
-			for _, node := range distribution.Nodes {
-				client, err := rpc.DialHTTP("tcp", fmt.Sprintf("%s:%s", node.Addr, node.Port))
-				if err != nil {
-					continue // try another
-				}
-				defer client.Close()
-
-				// Write response
-				client.Call("Arith.Sum", &args, &reply)
-				w.Write([]byte(fmt.Sprintf("Reponse: %d", reply)))
-
-				// stop iteration
-				return
-			}
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Error, no nodes has been contacted"))
-		})
+		// handlers to test RPC calls
+		http.HandleFunc("/sum", handlers.Sum)
+		http.HandleFunc("/palindrom", handlers.Palindrom)
 
 		log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
 	}
