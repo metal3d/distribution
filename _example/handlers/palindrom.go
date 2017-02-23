@@ -52,6 +52,7 @@ func Palindrom(w http.ResponseWriter, r *http.Request) {
 		waiter := waiters[i]
 		fmt.Println("Waiting", waiter.Node.Addr)
 		waiter.Wait()
+		fmt.Println("Reponse", waiter.Node.Addr)
 	}
 
 	// sum results that are kept in counters

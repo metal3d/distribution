@@ -47,7 +47,7 @@ func (p *Palindrom) Check(v *int, r *bool) error {
 
 // CheckN count the binary palindrom in a giver Range.
 func (p *Palindrom) CheckN(v *Range, c *int) error {
-	fmt.Println(v)
+	fmt.Println("Caluclate palindroms in range", v)
 	for i := v.Start; i < v.End; i++ {
 		if IsPalindrom(i) {
 			*c++
@@ -57,6 +57,6 @@ func (p *Palindrom) CheckN(v *Range, c *int) error {
 }
 
 // RegisterPalindrom registers interface in RPC handlers.
-func RegisterPalindrom() {
-	rpc.Register(new(Palindrom))
+func RegisterPalindrom(s *rpc.Server) {
+	s.Register(new(Palindrom))
 }

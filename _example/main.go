@@ -4,9 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
-	"net/rpc"
 
 	"github.com/metal3d/distribution"
 	"github.com/metal3d/distribution/_example/handlers"
@@ -17,47 +15,49 @@ import (
 )
 
 var (
-	port   = 10000
-	node   = false
-	master = fmt.Sprintf("%s:%d", "localhost", port)
-	debug  = true
+	masterAddr = ":3000"
+	node       = false
+	master     = fmt.Sprintf("%s:%d", "localhost", masterAddr)
+	debug      = 1
 )
 
 func main() {
-	flag.IntVar(&port, "port", port, "port to listen")
+	flag.StringVar(&masterAddr, "addr", masterAddr, "addr to listen for master")
 	flag.BoolVar(&node, "node", node, "declare this process as node")
-	flag.StringVar(&master, "master", master, "master address")
-	flag.BoolVar(&debug, "debug", debug, "see logs")
+	flag.StringVar(&master, "master", master, "master address for node")
+	flag.IntVar(&debug, "debug", debug, "see logs")
 	flag.Parse()
 
 	distribution.Debug = debug
 
 	if node {
-		// open a listen interface
-		l, err := net.Listen("tcp", ":0")
-		if err != nil {
-			log.Fatal(err)
-		}
-
 		// register that node to the master
-		go distribution.RegisterNode(l.Addr().String(), master)
+		node := distribution.RegisterNode(master)
 
 		//register RPC endpoints
-		tasks.RegisterArith()
-		tasks.RegisterPalindrom()
+		tasks.RegisterArith(node.Server)
+		tasks.RegisterPalindrom(node.Server)
 
 		// generate endpoints
-		rpc.HandleHTTP()
+		node.HandleHTTP()
 
-		// and serve !
-		log.Fatal(http.Serve(l, nil))
+		log.Println("Starting node")
+		log.Fatal(node.Serve())
+
 	} else {
-		distribution.RegisterMaster()
+
+		// Serve master endpoint - note that the http server is
+		// separated.
+		go func() {
+			log.Fatal(distribution.ServeMaster(masterAddr))
+		}()
 
 		// handlers to test RPC calls
 		http.HandleFunc("/sum", handlers.Sum)
 		http.HandleFunc("/palindrom", handlers.Palindrom)
 
-		log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
+		log.Println("Starting server on :3001")
+		log.Fatal(http.ListenAndServe(":3001", nil))
+
 	}
 }

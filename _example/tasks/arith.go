@@ -19,6 +19,6 @@ func (a *Arith) Sum(args *[]int, reply *int) error {
 }
 
 // RegisterArith is a simple function to register Arith structure as a RPC endpoint.
-func RegisterArith() {
-	rpc.Register(new(Arith))
+func RegisterArith(s *rpc.Server) {
+	s.Register(new(Arith))
 }

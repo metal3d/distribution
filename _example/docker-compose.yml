@@ -3,13 +3,13 @@ services:
 
   node:
     build: .
-    command: -node -master master:10000
+    command: -node -master master:3000
     depends_on:
       - master
 
   master:
     build: .
-    command: -debug=false
+    command: -debug=1
     ports:
-      - 10000:10000
+      - 3001:3001
 

@@ -123,9 +123,15 @@ import (
 )
 
 func main(){
-    // handler a register endpoint for nodes
-    dist.RegisterMaster()
 
+    // at first, let's register this process as
+    // master. So that node can contact master
+    // to register.
+    go func(){
+        dist.ServeMaster(":3000")
+    }
+
+    // This is optionnal, but for testing purpose we will
     // create a test endpoint to call nodes
     http.HandleFunc("/sum", func(w http.ResponseWriter, r *http.Request){
         args := []int{2,4,6}
@@ -137,14 +143,12 @@ func main(){
             fmt.Prinln("Reply from node", node.Addr, reply)
         }
     })
-    fmt.Println("Listening :3000")
-    http.ListenAndServe(":3000", nil)
+    fmt.Println("Listening :3001")
+    http.ListenAndServe(":3001", nil)
 }
 ```
 
-That master node is now able to register nodes, the call to  `dist.RegisterMaster()` has registered a "register-node" handler. It listens on ":3000" port.
-
-**NOTE** `RegisterMaster` will start a goroutine that will check if nodes are alive. When a node doesn't respond, so the master removes it from the list.
+That master node is now able to register nodes, the call to  `dist.ServeMaster()` has registered a "register-node" handler. It listens on ":3000" port. Nodes will be configured to hit that endpoint.
 
 Now, create node source code in "node/main.go" with a `Arith` type that can respond to RPC calls:
 
@@ -160,7 +164,7 @@ import (
     dist "gopkg.in/metal3d/distribution.v1"
 )
 
-// a simple Arith type
+// a simple Arith type to handle RPC methods.
 type Arith int
 
 // Implement a RPC endpoint. Keep in mind that methods should have 
@@ -175,24 +179,19 @@ func (a *Arith) Sum(args *[]int, reply *int) error {
 }
 
 func main(){
+
+    // create a node server - port is the RPC master
+    node := dist.RegisterNode("localhost:3000")
+
     // now, register Arith as a RPC endpoint
-    rpc.Register(new(Arith))
+    node.Server.Register(new(Arith))
 
-    // and let RPC to register our HTTP endpoints
-    rpc.HandleHTTP()
+    // and now handler requests
+    node.HandleHTTP()
 
-    // open a tcp socket to serve node.
-    // The ":0" will let os to give us a random port.
-    l, err := net.Listen("tcp", ":0")
-    if err != nil {
-        log.Fatal(err)
-    }
-    
-    // Register the node on master (localhost:3000).
-    go dist.RegisterNode(l.Addr().String(), "localhost:3000")
-
-    // use that socker throught http
-    http.Serve(l, nil)
+    // And start to serve that node.
+    log.Println("Node listening")
+    node.Serve()
 }
 ```
 
@@ -202,7 +201,7 @@ It's time to try:
 # open a terminal
 $ cd master
 $ go run main.go
-Listening :3000
+Listening :3001
 
 # open another terminal
 $ cd node
@@ -211,8 +210,12 @@ $ go run main.go
 # afterward, you can open several terminals and launch other nodes.
 
 # open a third term to call master/sum endpoint on port 3000:
-curl localhost:3000/sum
+curl localhost:3001/sum
 ```
 
 If you check terminal where you launched master, you'll see the reply from the node.
+
+Keep in mind that `:3000` was declared to serve RPC call, and `:3001` to serve `sum` endpoint. It's not mandatory to use http to serve endpoints to call RPC. That's an example to show you how a master can send requests to nodes and get back results.
+
+Check `_example` directory to see a more complex example.
 

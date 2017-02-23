@@ -3,7 +3,8 @@ package distribution
 import (
 	"errors"
 	"fmt"
-	"net/rpc"
+	"net"
+	"net/rpc/jsonrpc"
 	"sort"
 	"time"
 )
@@ -11,8 +12,8 @@ import (
 var (
 	Nodes            = nodes{}
 	RegisterEndpoint = "/register-node"
-	Debug            = false
-	HeartBeatDelay   = time.Duration(2 * time.Second)
+	Debug            = 0
+	HeartBeatDelay   = time.Duration(1 * time.Second)
 )
 
 // Node represent a calculation node.
@@ -26,10 +27,14 @@ type Node struct {
 func Call(endpoint string, args interface{}, reply interface{}) (*Node, error) {
 	sort.Sort(Nodes)
 	for _, node := range Nodes {
-		client, err := rpc.DialHTTP("tcp", fmt.Sprintf("%s:%s", node.Addr, node.Port))
+		conn, err := net.DialTimeout("tcp",
+			fmt.Sprintf("%s:%s", node.Addr, node.Port),
+			HeartBeatDelay)
 		if err != nil {
+			removeNode(node)
 			continue
 		}
+		client := jsonrpc.NewClient(conn)
 		defer client.Close()
 		node.Count++
 		client.Call(endpoint, args, reply)
@@ -44,10 +49,14 @@ func Call(endpoint string, args interface{}, reply interface{}) (*Node, error) {
 func Go(endpoint string, args interface{}, reply interface{}) *Waiter {
 	sort.Sort(Nodes)
 	for _, node := range Nodes {
-		client, err := rpc.DialHTTP("tcp", fmt.Sprintf("%s:%s", node.Addr, node.Port))
+		conn, err := net.DialTimeout("tcp",
+			fmt.Sprintf("%s:%s", node.Addr, node.Port),
+			HeartBeatDelay)
 		if err != nil {
+			removeNode(node)
 			continue
 		}
+		client := jsonrpc.NewClient(conn)
 		node.Count++
 		return &Waiter{
 			Node:    node,
