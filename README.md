@@ -9,11 +9,11 @@ That package provides 2 methods to call RPC nodes:
 - `distribution.Call(string, interface{}, interface{})` to make a sync call
 - `distribution.Go(string, interface{}, interface{})` to make an async call
 
-Both method do the same call, but the returned values are not used the same. First return an error, while second return a `*Waiter` that can be `nil` in case of error. The Waiter handles used `*Node` and a `Wait()` method bloking while the node has not answered.
+Both methods do the same call, but the returned values are not used the same. 
+
+First return a `*Node` and an error, while second return a `*Waiter` that can be `nil` in case of error. The Waiter handles used `*Node` and a `Wait()` method bloking while the node has not answered. Because `Go()` method is async, there is no way (at this time) to be sure that the routine is ok unless checking `Waiter.Error()`. 
 
 Waiter handler Node and Wait() method.
-
-So, `Go()` method is probably better if you want to know wich node answered. See the palindrom handler in `_example` directory to see a complex calcluation on several nodes.
 
 Example:
 
@@ -31,11 +31,11 @@ if err != nil {
 // or
 
 w1 = distribution.Go('Bayesian.GetClassification', &dataset1, &response1)
-if w1 == nil {
+if w1.Error() != nil {
     // error
 }
 w2 = distribution.Go('Bayesian.GetClassification', &dataset2, &response2)
-if w2 == nil {
+if w2.Error() != nil {
     //error
 } 
 
@@ -70,8 +70,7 @@ Please,
 # install example without installing binary (-d)
 go get -d -u gopkg.in/metal3d/distribution.v1/...
 cd $GOPATH/src/gopkg.in/distribution.v1/_example
-make build
-docker-compose up
+make
 
 # open a new terminal and do:
 # -> scale up nodes
@@ -95,7 +94,6 @@ docker-compose start master
 
 # IMPORTANT
 # then please stop docker containers and cleanup
-docker-compose stop
 docker-compose down -v
 
 ```
